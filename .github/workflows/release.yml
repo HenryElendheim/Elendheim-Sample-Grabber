@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag, for example v1.0
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Create release with APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk "Elendheim-Sample-Grabber-$TAG.apk"
+          gh release create "$TAG" \
+            --target "${{ github.sha }}" \
+            --title "Elendheim Sample Grabber $TAG" \
+            --notes "Elendheim Sample Grabber is a one-button field recorder for Android. Tap the mic, it records five to ten seconds, trims the silence off both ends, and saves a WAV named by date to Music/Elendheim Samples." \
+            "Elendheim-Sample-Grabber-$TAG.apk"
