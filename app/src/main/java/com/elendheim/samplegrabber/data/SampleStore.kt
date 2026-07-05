@@ -18,18 +18,18 @@ object SampleStore {
 
     private const val RELATIVE_PATH = "Music/Elendheim Samples/"
 
-    fun save(context: Context, displayName: String, wavBytes: ByteArray): Uri {
+    fun save(context: Context, displayName: String, bytes: ByteArray, mimeType: String): Uri {
         val resolver = context.contentResolver
         val values = ContentValues().apply {
             put(MediaStore.Audio.Media.DISPLAY_NAME, displayName)
-            put(MediaStore.Audio.Media.MIME_TYPE, "audio/x-wav")
+            put(MediaStore.Audio.Media.MIME_TYPE, mimeType)
             put(MediaStore.Audio.Media.RELATIVE_PATH, RELATIVE_PATH)
             put(MediaStore.Audio.Media.IS_PENDING, 1)
         }
         val collection = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         val uri = resolver.insert(collection, values)
             ?: throw IllegalStateException("Could not create $displayName")
-        resolver.openOutputStream(uri)?.use { it.write(wavBytes) }
+        resolver.openOutputStream(uri)?.use { it.write(bytes) }
             ?: throw IllegalStateException("Could not write $displayName")
         values.clear()
         values.put(MediaStore.Audio.Media.IS_PENDING, 0)
@@ -59,17 +59,22 @@ object SampleStore {
             val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
             while (cursor.moveToNext()) {
                 val size = cursor.getLong(sizeCol)
+                val name = cursor.getString(nameCol)
                 var duration = cursor.getLong(durationCol)
                 if (duration <= 0 && size > 44) {
-                    // Our files are always mono 16-bit 44.1 kHz WAVs, so the
-                    // size tells us the duration even before the media
-                    // scanner has extracted it.
-                    duration = (size - 44) * 1000 / (44100 * 2)
+                    // The media scanner may not have extracted the duration
+                    // yet, but we know our own encoding parameters: mono
+                    // 16-bit 44.1 kHz WAV, or 128 kbps CBR MP3.
+                    duration = if (name.endsWith(".mp3")) {
+                        size * 8 / 128
+                    } else {
+                        (size - 44) * 1000 / (44100 * 2)
+                    }
                 }
                 samples.add(
                     Sample(
                         uri = ContentUris.withAppendedId(collection, cursor.getLong(idCol)),
-                        name = cursor.getString(nameCol),
+                        name = name,
                         durationMs = duration,
                         sizeBytes = size
                     )

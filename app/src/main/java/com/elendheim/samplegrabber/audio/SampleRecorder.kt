@@ -8,7 +8,7 @@ import kotlin.math.abs
 
 /**
  * Records mono 16-bit PCM from the mic. A grab is always between
- * MIN_SECONDS and MAX_SECONDS long: stopping early waits for the
+ * MIN_SECONDS and the configured maximum: stopping early waits for the
  * minimum, and the recorder cuts itself off at the maximum.
  */
 class SampleRecorder {
@@ -16,7 +16,6 @@ class SampleRecorder {
     companion object {
         const val SAMPLE_RATE = 44100
         const val MIN_SECONDS = 5
-        const val MAX_SECONDS = 10
     }
 
     @Volatile
@@ -32,10 +31,10 @@ class SampleRecorder {
      * (elapsed milliseconds, peak level 0..1) roughly every 46 ms.
      */
     @SuppressLint("MissingPermission")
-    fun record(onProgress: (Int, Float) -> Unit): ShortArray {
+    fun record(maxSeconds: Int, onProgress: (Int, Float) -> Unit): ShortArray {
         stopRequested = false
-        val minSamples = SAMPLE_RATE * MIN_SECONDS
-        val maxSamples = SAMPLE_RATE * MAX_SECONDS
+        val minSamples = SAMPLE_RATE * minOf(MIN_SECONDS, maxSeconds)
+        val maxSamples = SAMPLE_RATE * maxSeconds
         val minBuffer = AudioRecord.getMinBufferSize(
             SAMPLE_RATE,
             AudioFormat.CHANNEL_IN_MONO,

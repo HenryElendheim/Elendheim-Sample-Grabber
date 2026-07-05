@@ -5,11 +5,14 @@ import android.media.MediaPlayer
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.elendheim.samplegrabber.audio.Mp3Encoder
 import com.elendheim.samplegrabber.audio.SampleRecorder
 import com.elendheim.samplegrabber.audio.SilenceTrimmer
 import com.elendheim.samplegrabber.audio.WavCodec
+import com.elendheim.samplegrabber.data.ExportFormat
 import com.elendheim.samplegrabber.data.Sample
 import com.elendheim.samplegrabber.data.SampleStore
+import com.elendheim.samplegrabber.data.Settings
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -26,6 +29,7 @@ sealed interface RecorderState {
     data object Idle : RecorderState
     data class Recording(
         val elapsedMs: Int,
+        val maxMs: Int,
         val level: Float,
         val stopping: Boolean
     ) : RecorderState
@@ -36,6 +40,7 @@ sealed interface RecorderState {
 class GrabberViewModel(application: Application) : AndroidViewModel(application) {
 
     private val recorder = SampleRecorder()
+    private val settings = Settings(application)
     private var player: MediaPlayer? = null
 
     private val _state = MutableStateFlow<RecorderState>(RecorderState.Idle)
@@ -50,8 +55,24 @@ class GrabberViewModel(application: Application) : AndroidViewModel(application)
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 
+    private val _format = MutableStateFlow(settings.format)
+    val format: StateFlow<ExportFormat> = _format.asStateFlow()
+
+    private val _recordSeconds = MutableStateFlow(settings.recordSeconds)
+    val recordSeconds: StateFlow<Int> = _recordSeconds.asStateFlow()
+
     init {
         refreshSamples()
+    }
+
+    fun setFormat(value: ExportFormat) {
+        settings.format = value
+        _format.value = value
+    }
+
+    fun setRecordSeconds(value: Int) {
+        settings.recordSeconds = value
+        _recordSeconds.value = value
     }
 
     fun toggleRecord() {
@@ -70,22 +91,29 @@ class GrabberViewModel(application: Application) : AndroidViewModel(application)
 
     private fun startRecording() {
         stopPlayback()
-        _state.value = RecorderState.Recording(0, 0f, stopping = false)
+        val maxSeconds = _recordSeconds.value
+        val maxMs = maxSeconds * 1000
+        _state.value = RecorderState.Recording(0, maxMs, 0f, stopping = false)
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val raw = recorder.record { elapsedMs, level ->
+                val raw = recorder.record(maxSeconds) { elapsedMs, level ->
                     _state.value = RecorderState.Recording(
                         elapsedMs = elapsedMs,
+                        maxMs = maxMs,
                         level = level,
                         stopping = recorder.stopRequested
                     )
                 }
                 _state.value = RecorderState.Saving
                 val trimmed = SilenceTrimmer.trim(raw, SampleRecorder.SAMPLE_RATE)
-                val wav = WavCodec.encode(trimmed, SampleRecorder.SAMPLE_RATE)
+                val exportFormat = _format.value
+                val bytes = when (exportFormat) {
+                    ExportFormat.WAV -> WavCodec.encode(trimmed, SampleRecorder.SAMPLE_RATE)
+                    ExportFormat.MP3 -> Mp3Encoder.encode(trimmed, SampleRecorder.SAMPLE_RATE, 128)
+                }
                 val stamp = SimpleDateFormat("yyyy-MM-dd HH-mm-ss", Locale.US).format(Date())
-                val name = "Grab $stamp.wav"
-                SampleStore.save(getApplication(), name, wav)
+                val name = "Grab $stamp.${exportFormat.extension}"
+                SampleStore.save(getApplication(), name, bytes, exportFormat.mimeType)
                 refreshSamples()
                 _messages.tryEmit(getApplication<Application>().getString(R.string.saved_as, name))
             } catch (e: Exception) {

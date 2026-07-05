@@ -22,10 +22,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import android.content.Intent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,7 +42,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,6 +54,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -63,12 +69,19 @@ import com.elendheim.samplegrabber.audio.SampleRecorder
 import com.elendheim.samplegrabber.data.Sample
 import java.util.Locale
 
+private fun mimeTypeOf(sample: Sample): String =
+    if (sample.name.endsWith(".mp3")) "audio/mpeg" else "audio/x-wav"
+
 @Composable
 fun MainScreen(viewModel: GrabberViewModel, onMicTap: () -> Unit) {
     val state by viewModel.state.collectAsState()
     val samples by viewModel.samples.collectAsState()
     val playingUri by viewModel.playingUri.collectAsState()
+    val format by viewModel.format.collectAsState()
+    val recordSeconds by viewModel.recordSeconds.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    var showSettings by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.messages.collect { snackbarHostState.showSnackbar(it) }
@@ -78,24 +91,57 @@ fun MainScreen(viewModel: GrabberViewModel, onMicTap: () -> Unit) {
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Header()
-            RecordZone(state = state, onMicTap = onMicTap)
-            StatusLine(state = state)
-            Spacer(Modifier.height(20.dp))
-            SampleList(
-                samples = samples,
-                playingUri = playingUri,
-                onPlay = viewModel::togglePlay,
-                onDelete = viewModel::delete,
-                modifier = Modifier.weight(1f)
-            )
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .padding(padding)) {
+            if (showSettings) {
+                SettingsScreen(
+                    format = format,
+                    recordSeconds = recordSeconds,
+                    onFormatChange = viewModel::setFormat,
+                    onRecordSecondsChange = viewModel::setRecordSeconds,
+                    onBack = { showSettings = false }
+                )
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Header()
+                    RecordZone(state = state, onMicTap = onMicTap)
+                    StatusLine(state = state)
+                    Spacer(Modifier.height(20.dp))
+                    SampleList(
+                        samples = samples,
+                        playingUri = playingUri,
+                        onPlay = viewModel::togglePlay,
+                        onShare = { sample ->
+                            val send = Intent(Intent.ACTION_SEND).apply {
+                                type = mimeTypeOf(sample)
+                                putExtra(Intent.EXTRA_STREAM, sample.uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            context.startActivity(Intent.createChooser(send, sample.name))
+                        },
+                        onDelete = viewModel::delete,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                IconButton(
+                    onClick = { showSettings = true },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 8.dp, end = 8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Settings,
+                        contentDescription = stringResource(R.string.settings),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }
@@ -132,8 +178,7 @@ private fun RecordZone(state: RecorderState, onMicTap: () -> Unit) {
     val haptics = LocalHapticFeedback.current
     val recording = state as? RecorderState.Recording
     val level = recording?.level ?: 0f
-    val progress = (recording?.elapsedMs ?: 0) /
-        (SampleRecorder.MAX_SECONDS * 1000f)
+    val progress = recording?.let { it.elapsedMs / it.maxMs.toFloat() } ?: 0f
 
     val pulse by animateFloatAsState(
         targetValue = if (recording != null) 1f + level * 0.12f else 1f,
@@ -260,6 +305,7 @@ private fun SampleList(
     samples: List<Sample>,
     playingUri: android.net.Uri?,
     onPlay: (Sample) -> Unit,
+    onShare: (Sample) -> Unit,
     onDelete: (Sample) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -298,6 +344,7 @@ private fun SampleList(
                     sample = sample,
                     playing = playingUri == sample.uri,
                     onPlay = { onPlay(sample) },
+                    onShare = { onShare(sample) },
                     onDelete = { onDelete(sample) }
                 )
             }
@@ -310,6 +357,7 @@ private fun SampleRow(
     sample: Sample,
     playing: Boolean,
     onPlay: () -> Unit,
+    onShare: () -> Unit,
     onDelete: () -> Unit
 ) {
     Surface(
@@ -355,6 +403,13 @@ private fun SampleRow(
                     ),
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(onClick = onShare) {
+                Icon(
+                    imageVector = Icons.Rounded.Share,
+                    contentDescription = stringResource(R.string.share_sample),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             IconButton(onClick = onDelete) {

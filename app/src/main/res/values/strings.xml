@@ -10,9 +10,17 @@
     <string name="saved_as">Saved %1$s</string>
     <string name="mic_permission_needed">The mic button needs microphone access to grab sounds</string>
     <string name="empty_list_title">Nothing grabbed yet</string>
-    <string name="empty_list_body">Rain on a window, your pets, a weird door creak. Samples land in Music/Elendheim Samples as WAV files, ready for FL.</string>
+    <string name="empty_list_body">Rain on a window, your pets, a weird door creak. Samples land in Music/Elendheim Samples, ready for FL.</string>
     <string name="play_sample">Play sample</string>
     <string name="stop_sample">Stop playback</string>
     <string name="delete_sample">Delete sample</string>
     <string name="your_grabs">Your grabs</string>
+    <string name="share_sample">Share sample</string>
+    <string name="settings">Settings</string>
+    <string name="back">Back</string>
+    <string name="save_format">Save format</string>
+    <string name="save_format_hint">Grabs are saved and shared in this format. WAV is lossless, MP3 is smaller.</string>
+    <string name="record_length">Recording length</string>
+    <string name="record_length_hint">How long a grab runs before it stops on its own. You can always tap to stop earlier.</string>
+    <string name="seconds_short">%1$d s</string>
 </resources>
