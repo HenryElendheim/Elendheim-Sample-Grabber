@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">Elendheim Sample Grabber</string>
+    <string name="tagline">Catch found sounds before they get away</string>
+    <string name="tap_to_grab">Tap the mic when you hear something good</string>
+    <string name="recording_hint">Grabbing. Tap again to stop early</string>
+    <string name="min_length_hint">Keeping it rolling to five seconds</string>
+    <string name="saving">Trimming the silence</string>
+    <string name="record_button">Record a sample</string>
+    <string name="stop_button">Stop recording</string>
+    <string name="saved_as">Saved %1$s</string>
+    <string name="mic_permission_needed">The mic button needs microphone access to grab sounds</string>
+    <string name="empty_list_title">Nothing grabbed yet</string>
+    <string name="empty_list_body">Rain on a window, your pets, a weird door creak. Samples land in Music/Elendheim Samples as WAV files, ready for FL.</string>
+    <string name="play_sample">Play sample</string>
+    <string name="stop_sample">Stop playback</string>
+    <string name="delete_sample">Delete sample</string>
+    <string name="your_grabs">Your grabs</string>
+</resources>
