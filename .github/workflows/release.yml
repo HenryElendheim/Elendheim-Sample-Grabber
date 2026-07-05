@@ -30,10 +30,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
+          NOTES: >-
+            Elendheim Sample Grabber is a one-button field recorder for
+            Android. Tap the mic, it records a short grab, trims the silence
+            off both ends, and saves it named by date to Music/Elendheim
+            Samples. The settings choose the save format (WAV or MP3) and how
+            long a grab runs (5 to 30 seconds).
         run: |
           cp app/build/outputs/apk/debug/app-debug.apk "Elendheim-Sample-Grabber-$TAG.apk"
-          gh release create "$TAG" \
-            --target "${{ github.sha }}" \
-            --title "Elendheim Sample Grabber $TAG" \
-            --notes "Elendheim Sample Grabber is a one-button field recorder for Android. Tap the mic, it records five to ten seconds, trims the silence off both ends, and saves a WAV named by date to Music/Elendheim Samples." \
-            "Elendheim-Sample-Grabber-$TAG.apk"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release edit "$TAG" --title "Elendheim Sample Grabber $TAG" --notes "$NOTES"
+            gh release upload "$TAG" "Elendheim-Sample-Grabber-$TAG.apk" --clobber
+          else
+            gh release create "$TAG" \
+              --target "${{ github.sha }}" \
+              --title "Elendheim Sample Grabber $TAG" \
+              --notes "$NOTES" \
+              "Elendheim-Sample-Grabber-$TAG.apk"
+          fi
